@@ -1,0 +1,1254 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>2D→3D Pussel: Kvadrat → Kub → Svärd</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: rgba(255,255,255,0.06);
+      --panel2: rgba(255,255,255,0.09);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.65);
+      --ok: #49d17d;
+      --warn: #ffcc66;
+      --err: #ff6680;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; background: radial-gradient(1200px 900px at 50% 15%, #121a24, var(--bg)); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif; }
+    button, input { font: inherit; }
+
+    #app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+      padding: 12px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      backdrop-filter: blur(8px);
+    }
+    header .left { display: flex; flex-direction: column; gap: 4px; }
+    header h1 { font-size: 16px; margin: 0; letter-spacing: 0.2px; }
+    header .sub { font-size: 12px; color: var(--muted); }
+    header .right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+    .pill {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--panel2);
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px;
+      color: var(--muted);
+      user-select: none;
+    }
+    .btn {
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .btn:hover { background: rgba(255,255,255,0.12); }
+    .btn:active { transform: translateY(1px); }
+
+    main {
+      position: relative;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      overflow: hidden;
+      min-height: 520px;
+    }
+
+    footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+    }
+    footer .hint { font-size: 12px; color: var(--muted); line-height: 1.35; }
+    footer .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.35); display: inline-block; }
+    .dot.ok { background: var(--ok); }
+    .dot.warn { background: var(--warn); }
+    .dot.err { background: var(--err); }
+
+    /* Screens */
+    .screen {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+    }
+    .hidden { display: none !important; }
+
+    /* Phase 1 layout */
+    #phase2dWrap {
+      width: min(980px, 100%);
+      height: min(680px, 100%);
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 14px;
+      align-items: stretch;
+    }
+    @media (max-width: 860px) {
+      #phase2dWrap { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+    }
+
+    .panel {
+      border-radius: 16px;
+      background: rgba(0,0,0,0.15);
+      border: 1px solid rgba(255,255,255,0.10);
+      overflow: hidden;
+      position: relative;
+    }
+    .panelHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.04);
+      gap: 10px;
+    }
+    .panelHeader .title { font-size: 13px; color: var(--text); }
+    .panelHeader .mini { font-size: 12px; color: var(--muted); }
+
+    #svgBoard {
+      width: 100%;
+      height: 100%;
+      touch-action: none; /* important for drag on mobile */
+      user-select: none;
+      background:
+        radial-gradient(800px 400px at 50% 20%, rgba(255,255,255,0.05), transparent 70%),
+        linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.20));
+    }
+
+    .side {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card {
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.05);
+    }
+    .card h2 { font-size: 13px; margin: 0 0 6px; }
+    .card p { font-size: 12px; margin: 0; color: var(--muted); line-height: 1.35; }
+    .kbd {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.25);
+      font-size: 12px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    /* Transition overlay */
+    #transitionOverlay {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(1000px 700px at 50% 40%, rgba(80,160,255,0.18), rgba(0,0,0,0.78));
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 600ms ease;
+    }
+    #transitionOverlay.on { opacity: 1; pointer-events: auto; }
+    #transitionOverlay .msg {
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.35);
+      text-align: center;
+      width: min(460px, 92%);
+    }
+    #transitionOverlay .msg h3 { margin: 0 0 8px; font-size: 14px; }
+    #transitionOverlay .msg p { margin: 0; font-size: 12px; color: var(--muted); }
+
+    /* Phase 2 (3D) */
+    #phase3dWrap {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 14px;
+      padding: 18px;
+      align-items: stretch;
+    }
+    @media (max-width: 860px) {
+      #phase3dWrap { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+    }
+    #threePanel { position: relative; }
+    #threeCanvas { width: 100%; height: 100%; display: block; touch-action: none; }
+
+    .toast {
+      position: absolute;
+      left: 12px;
+      top: 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.12);
+      font-size: 12px;
+      color: var(--muted);
+      max-width: 340px;
+      backdrop-filter: blur(8px);
+    }
+    .toast b { color: var(--text); }
+
+    /* subtle vignette */
+    main::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(1200px 900px at 50% 35%, transparent 55%, rgba(0,0,0,0.35));
+      opacity: 0.8;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <header>
+      <div class="left">
+        <h1>2D→3D Pussel: Kvadrat → Kub → Svärd</h1>
+        <div class="sub" id="subtitle">Fas 1: Bygg en kvadrat av 10 asymmetriska bitar.</div>
+      </div>
+      <div class="right">
+        <span class="pill" id="phasePill">Fas 1 / 2D</span>
+        <button class="btn" id="resetBtn" title="Starta om aktuell fas">Återställ</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- Phase 1 -->
+      <section class="screen" id="phase2d">
+        <div id="phase2dWrap">
+          <div class="panel" id="boardPanel">
+            <div class="panelHeader">
+              <div class="title">2D-bräde</div>
+              <div class="mini">Dra • Rotera • Snappa</div>
+            </div>
+            <svg id="svgBoard" viewBox="0 0 980 650" aria-label="2D puzzle board"></svg>
+          </div>
+
+          <aside class="panel">
+            <div class="panelHeader">
+              <div class="title">Kontroller</div>
+              <div class="mini">Desktop & mobil</div>
+            </div>
+            <div class="side">
+              <div class="card">
+                <h2>Placera bitar</h2>
+                <p>
+                  • <span class="kbd">Dra</span> en bit med mus/finger.<br/>
+                  • <span class="kbd">R</span> roterar vald bit 90° (desktop).<br/>
+                  • <span class="kbd">Dubbel-tap</span> på en bit roterar 90° (mobil).<br/>
+                  • När en bit är nära sin plats, <b>snappar</b> den fast.
+                </p>
+              </div>
+              <div class="card">
+                <h2>Mål</h2>
+                <p>
+                  Bygg en <b>kvadrat</b>. När allt sitter: en animation, och fas 2 startar i 3D.
+                </p>
+              </div>
+              <div class="card">
+                <h2>Tips</h2>
+                <p>
+                  Asymmetri + rotation gör det klurigt. Testa att rotera bitar innan du “ger upp” på en placering.
+                </p>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- Transition overlay -->
+      <div id="transitionOverlay">
+        <div class="msg">
+          <h3>Förvandling…</h3>
+          <p>Kvadraten “lyfter” och blir 3D. Nästa steg: bygg en kub av asymmetriska delar.</p>
+        </div>
+      </div>
+
+      <!-- Phase 2 -->
+      <section class="screen hidden" id="phase3d">
+        <div id="phase3dWrap">
+          <div class="panel" id="threePanel">
+            <div class="panelHeader">
+              <div class="title">3D-scen</div>
+              <div class="mini">Dra delar • Rotera scenen</div>
+            </div>
+            <canvas id="threeCanvas"></canvas>
+            <div class="toast" id="toast3d">
+              <b>Fas 2:</b> Dra delarna till mitten. Rotera scenen genom att dra i bakgrunden.
+            </div>
+          </div>
+
+          <aside class="panel">
+            <div class="panelHeader">
+              <div class="title">Kontroller</div>
+              <div class="mini">3D</div>
+            </div>
+            <div class="side">
+              <div class="card">
+                <h2>Bygg kuben</h2>
+                <p>
+                  • <span class="kbd">Dra del</span> för att flytta den.<br/>
+                  • Delar <b>snappar</b> när de är nära rätt läge/rotation.<br/>
+                  • Rotera scenen genom att dra på tom yta.
+                </p>
+              </div>
+              <div class="card">
+                <h2>Slutsekvens</h2>
+                <p>
+                  När kuben är klar: den roterar och pulserar svagt, sen <b>exploderar</b> den och ett <b>svärdshandtag</b> syns.
+                </p>
+              </div>
+              <div class="card">
+                <h2>Återställ</h2>
+                <p>
+                  Klicka <span class="kbd">Återställ</span> om du vill prova från början i aktuell fas.
+                </p>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="hint" id="hint">
+        Fas 1: Rotera bitar för att passa. (Desktop: tryck <span class="kbd">R</span> på vald bit)
+      </div>
+      <div class="status">
+        <span><span class="dot warn" id="statusDot"></span> <span id="statusText">Pågår…</span></span>
+        <span class="pill" id="progressPill">0 / 10 låsta</span>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module">
+    // =========================
+    // Utilities
+    // =========================
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const dist2 = (ax, ay, bx, by) => {
+      const dx = ax - bx, dy = ay - by;
+      return dx*dx + dy*dy;
+    };
+    const easeInOut = (t) => (t<0.5) ? 2*t*t : 1 - Math.pow(-2*t+2,2)/2;
+
+    // =========================
+    // Global UI
+    // =========================
+    const subtitle = document.getElementById("subtitle");
+    const phasePill = document.getElementById("phasePill");
+    const resetBtn = document.getElementById("resetBtn");
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const progressPill = document.getElementById("progressPill");
+    const hint = document.getElementById("hint");
+    const overlay = document.getElementById("transitionOverlay");
+
+    const screen2d = document.getElementById("phase2d");
+    const screen3d = document.getElementById("phase3d");
+
+    let currentPhase = 1;
+
+    function setStatus(kind, text) {
+      statusDot.classList.remove("ok","warn","err");
+      statusDot.classList.add(kind);
+      statusText.textContent = text;
+    }
+
+    function setPhaseUI(phase) {
+      currentPhase = phase;
+      if (phase === 1) {
+        subtitle.textContent = "Fas 1: Bygg en kvadrat av 10 asymmetriska bitar.";
+        phasePill.textContent = "Fas 1 / 2D";
+        hint.innerHTML = `Fas 1: Rotera bitar för att passa. (Desktop: tryck <span class="kbd">R</span> på vald bit)`;
+      } else {
+        subtitle.textContent = "Fas 2: Bygg en kub i 3D av asymmetriska delar.";
+        phasePill.textContent = "Fas 2 / 3D";
+        hint.textContent = "Fas 2: Dra delar till mitten. Rotera scenen genom att dra på tom yta.";
+      }
+    }
+
+    // =========================
+    // Phase 1: 2D SVG Puzzle
+    // =========================
+    const svg = document.getElementById("svgBoard");
+
+    // Board area and target square region
+    const BOARD_W = 980, BOARD_H = 650;
+    const TARGET_SIZE = 360;
+    const TARGET_X = (BOARD_W - TARGET_SIZE) / 2;
+    const TARGET_Y = 120;
+
+    // We build 10 asymmetrical polygon pieces that exactly tile a square (in concept),
+    // but we implement snap-to pre-authored target transforms for each piece.
+    // Each piece uses local coordinates and a target transform (x,y,rot).
+    const pieces2d = [];
+    let selected2d = null;
+
+    // helper to create SVG element
+    function el(name, attrs = {}) {
+      const n = document.createElementNS("http://www.w3.org/2000/svg", name);
+      for (const [k,v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+      return n;
+    }
+
+    function setup2D() {
+      svg.innerHTML = "";
+
+      // Background target outline
+      const targetRect = el("rect", {
+        x: TARGET_X, y: TARGET_Y,
+        width: TARGET_SIZE, height: TARGET_SIZE,
+        rx: 16,
+        fill: "rgba(0,0,0,0.0)",
+        stroke: "rgba(255,255,255,0.18)",
+        "stroke-dasharray": "8 8",
+        "stroke-width": "2"
+      });
+      svg.appendChild(targetRect);
+
+      // A faint grid
+      const grid = el("g", { opacity: "0.18" });
+      const step = 30;
+      for (let x=0; x<=BOARD_W; x+=step) {
+        grid.appendChild(el("line", { x1:x, y1:0, x2:x, y2:BOARD_H, stroke:"white", "stroke-width":1, opacity: x%120===0 ? 0.25 : 0.12 }));
+      }
+      for (let y=0; y<=BOARD_H; y+=step) {
+        grid.appendChild(el("line", { x1:0, y1:y, x2:BOARD_W, y2:y, stroke:"white", "stroke-width":1, opacity: y%120===0 ? 0.25 : 0.12 }));
+      }
+      svg.appendChild(grid);
+
+      // Define 10 asymmetric polygons in local coords (rough “jigsaw-ish” shapes)
+      // and define targets that assemble into the square.
+      // For simplicity: targets are positioned within the target square on a 5x2 layout with offsets and rotations,
+      // but the shapes are uneven so you need rotation.
+      const defs = [
+        // points are local; each piece is roughly within 0..120
+        { id:0, pts:"0,0 110,8 98,44 120,74 78,98 26,84 10,120 -8,70 24,38", color:"rgba(110,200,255,0.75)", target:{x:TARGET_X+10, y:TARGET_Y+20, r:0} },
+        { id:1, pts:"0,10 90,0 116,34 90,66 108,110 52,120 0,92 22,56", color:"rgba(255,170,120,0.75)", target:{x:TARGET_X+120, y:TARGET_Y+18, r:90} },
+        { id:2, pts:"10,0 120,18 104,60 120,96 74,120 34,102 0,120 0,44", color:"rgba(190,255,160,0.75)", target:{x:TARGET_X+250, y:TARGET_Y+14, r:180} },
+        { id:3, pts:"0,0 92,10 120,40 94,70 120,120 52,110 22,84 0,60", color:"rgba(230,170,255,0.75)", target:{x:TARGET_X+18, y:TARGET_Y+140, r:270} },
+        { id:4, pts:"8,0 120,8 120,62 90,70 104,120 44,112 0,120 14,60", color:"rgba(255,255,140,0.75)", target:{x:TARGET_X+135, y:TARGET_Y+145, r:0} },
+
+        { id:5, pts:"0,0 110,0 120,34 90,60 120,90 78,120 20,106 0,70 18,40", color:"rgba(140,255,220,0.75)", target:{x:TARGET_X+240, y:TARGET_Y+140, r:90} },
+        { id:6, pts:"0,20 60,0 120,12 100,52 120,82 70,120 20,100 0,70 18,42", color:"rgba(255,140,170,0.75)", target:{x:TARGET_X+20, y:TARGET_Y+255, r:180} },
+        { id:7, pts:"0,0 120,0 102,42 120,70 92,92 120,120 40,112 0,120 14,54", color:"rgba(170,200,255,0.75)", target:{x:TARGET_X+135, y:TARGET_Y+260, r:270} },
+        { id:8, pts:"0,10 100,0 120,30 92,64 120,90 88,120 26,110 0,82 18,52", color:"rgba(255,210,150,0.75)", target:{x:TARGET_X+250, y:TARGET_Y+260, r:0} },
+        { id:9, pts:"0,0 110,14 120,50 96,64 120,92 84,120 30,110 0,120 10,52", color:"rgba(190,255,200,0.75)", target:{x:TARGET_X+130, y:TARGET_Y+375, r:180} },
+      ];
+
+      // scatter start positions around edges
+      const starts = [
+        {x:80,y:80},{x:820,y:90},{x:840,y:520},{x:100,y:520},{x:90,y:250},
+        {x:830,y:250},{x:480,y:550},{x:480,y:60},{x:220,y:560},{x:740,y:560},
+      ];
+
+      pieces2d.length = 0;
+      selected2d = null;
+
+      // add pieces in a group so we can reorder by append
+      const piecesLayer = el("g", {});
+      svg.appendChild(piecesLayer);
+
+      defs.forEach((d,i) => {
+        const g = el("g", { cursor:"grab" });
+        const shadow = el("polygon", {
+          points: d.pts,
+          fill: "rgba(0,0,0,0.35)",
+          transform: "translate(3,4)"
+        });
+        const poly = el("polygon", {
+          points: d.pts,
+          fill: d.color,
+          stroke: "rgba(255,255,255,0.35)",
+          "stroke-width": "2",
+          "stroke-linejoin": "round"
+        });
+
+        g.appendChild(shadow);
+        g.appendChild(poly);
+
+        const state = {
+          id: d.id,
+          g,
+          poly,
+          x: starts[i].x,
+          y: starts[i].y,
+          r: [0,90,180,270][(i*7)%4],
+          locked: false,
+          target: d.target,
+          lastTap: 0
+        };
+
+        function applyTransform() {
+          g.setAttribute("transform", `translate(${state.x} ${state.y}) rotate(${state.r})`);
+          g.style.filter = state.locked ? "drop-shadow(0 0 10px rgba(73,209,125,0.35))" : "none";
+          g.style.opacity = state.locked ? "0.95" : "1";
+        }
+        state.apply = applyTransform;
+        applyTransform();
+
+        // pointer events
+        let dragging = false;
+        let offset = {x:0,y:0};
+
+        g.addEventListener("pointerdown", (e) => {
+          if (state.locked) return;
+          dragging = true;
+          selected2d = state;
+          g.setPointerCapture(e.pointerId);
+          g.setAttribute("cursor","grabbing");
+          // bring to front
+          piecesLayer.appendChild(g);
+
+          const pt = clientToSvg(e.clientX, e.clientY);
+          // offset in local translated coords (rotation ignored for simple drag feel)
+          offset.x = pt.x - state.x;
+          offset.y = pt.y - state.y;
+
+          // double-tap rotate for touch
+          const now = performance.now();
+          if (now - state.lastTap < 300) {
+            rotateSelected2D();
+          }
+          state.lastTap = now;
+        });
+
+        g.addEventListener("pointermove", (e) => {
+          if (!dragging || state.locked) return;
+          const pt = clientToSvg(e.clientX, e.clientY);
+          state.x = clamp(pt.x - offset.x, -40, BOARD_W - 80);
+          state.y = clamp(pt.y - offset.y, -40, BOARD_H - 80);
+          applyTransform();
+        });
+
+        g.addEventListener("pointerup", (e) => {
+          dragging = false;
+          g.releasePointerCapture(e.pointerId);
+          g.setAttribute("cursor","grab");
+          trySnap2D(state);
+          update2DProgress();
+        });
+
+        pieces2d.push(state);
+        piecesLayer.appendChild(g);
+      });
+
+      update2DProgress();
+
+      // helper: convert client coords to SVG coords
+      function clientToSvg(cx, cy) {
+        const rect = svg.getBoundingClientRect();
+        const x = (cx - rect.left) * (BOARD_W / rect.width);
+        const y = (cy - rect.top) * (BOARD_H / rect.height);
+        return {x,y};
+      }
+    }
+
+    function rotateSelected2D() {
+      if (!selected2d || selected2d.locked) return;
+      selected2d.r = (selected2d.r + 90) % 360;
+      selected2d.apply();
+      trySnap2D(selected2d);
+      update2DProgress();
+    }
+
+    function trySnap2D(piece) {
+      if (piece.locked) return;
+
+      // Require near correct rotation and near target pos
+      const target = piece.target;
+      const rotMatch = ((piece.r % 360) + 360) % 360 === ((target.r % 360) + 360) % 360;
+
+      // Distance threshold
+      const d = dist2(piece.x, piece.y, target.x, target.y);
+      const close = d < 24*24;
+
+      if (rotMatch && close) {
+        piece.x = target.x;
+        piece.y = target.y;
+        piece.locked = true;
+        piece.apply();
+      }
+    }
+
+    function update2DProgress() {
+      const locked = pieces2d.filter(p => p.locked).length;
+      progressPill.textContent = `${locked} / 10 låsta`;
+
+      if (locked === 10) {
+        setStatus("ok", "Kvadraten är klar!");
+        // Start transition shortly
+        setTimeout(() => startTransitionTo3D(), 450);
+      } else {
+        setStatus("warn", "Pågår…");
+      }
+    }
+
+    // Keyboard rotate (desktop)
+    window.addEventListener("keydown", (e) => {
+      if (currentPhase !== 1) return;
+      if (e.key.toLowerCase() === "r") rotateSelected2D();
+    });
+
+    // =========================
+    // Transition
+    // =========================
+    async function startTransitionTo3D() {
+      // quick “lift” effect by scaling SVG pieces group
+      overlay.classList.add("on");
+
+      // Animate: scale target area
+      const gAll = svg.querySelector("g");
+      if (gAll) {
+        const start = performance.now();
+        const dur = 900;
+        const tick = (t) => {
+          const p = clamp((t - start) / dur, 0, 1);
+          const k = 1 + 0.06 * easeInOut(p);
+          svg.style.transformOrigin = "50% 50%";
+          svg.style.transform = `scale(${k})`;
+          if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+
+      await new Promise(r => setTimeout(r, 900));
+      svg.style.transform = "";
+
+      // Swap screens
+      screen2d.classList.add("hidden");
+      screen3d.classList.remove("hidden");
+      setPhaseUI(2);
+
+      overlay.classList.remove("on");
+
+      // init 3D
+      init3D();
+    }
+
+    // =========================
+    // Phase 2: 3D (Three.js)
+    // =========================
+    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+    import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+
+    const canvas = document.getElementById("threeCanvas");
+    const toast3d = document.getElementById("toast3d");
+
+    let renderer, scene, camera, controls;
+    let raycaster, pointerNDC, dragPlane;
+    let dragState = null;
+
+    let puzzleGroup, targetGroup, pieceGroup;
+    let pieces3d = [];
+    let assembled = false;
+
+    // animation / end sequence
+    let endSequence = { phase: "none", t: 0 };
+
+    function init3D() {
+      // clean up if re-init
+      if (renderer) {
+        renderer.dispose();
+        renderer = null;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(rect.width, rect.height, false);
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0x0b0f14, 6, 14);
+
+      camera = new THREE.PerspectiveCamera(55, rect.width / rect.height, 0.1, 100);
+      camera.position.set(4.8, 3.4, 6.2);
+
+      controls = new OrbitControls(camera, canvas);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.rotateSpeed = 0.65;
+      controls.zoomSpeed = 0.8;
+      controls.panSpeed = 0.6;
+      controls.target.set(0, 0.4, 0);
+
+      raycaster = new THREE.Raycaster();
+      pointerNDC = new THREE.Vector2();
+      dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // y-plane, will be updated per drag
+
+      // lights
+      scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+      const key = new THREE.DirectionalLight(0xffffff, 1.05);
+      key.position.set(5, 8, 4);
+      scene.add(key);
+      const rim = new THREE.DirectionalLight(0xaaccff, 0.65);
+      rim.position.set(-6, 3, -4);
+      scene.add(rim);
+
+      // ground reference (invisible plane for depth cues)
+      const grid = new THREE.GridHelper(12, 24, 0xffffff, 0xffffff);
+      grid.material.transparent = true;
+      grid.material.opacity = 0.08;
+      grid.position.y = 0;
+      scene.add(grid);
+
+      // groups
+      puzzleGroup = new THREE.Group();
+      scene.add(puzzleGroup);
+
+      targetGroup = new THREE.Group();
+      pieceGroup = new THREE.Group();
+      puzzleGroup.add(targetGroup);
+      puzzleGroup.add(pieceGroup);
+
+      // build target “cube” bounds
+      const cubeFrame = new THREE.BoxGeometry(2, 2, 2);
+      const cubeEdges = new THREE.EdgesGeometry(cubeFrame);
+      const cubeLine = new THREE.LineSegments(
+        cubeEdges,
+        new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 })
+      );
+      cubeLine.position.set(0, 1, 0);
+      targetGroup.add(cubeLine);
+
+      // create asymmetric pieces that snap into a cube volume (2x2x2)
+      pieces3d = create3DPieces();
+      pieces3d.forEach(p => pieceGroup.add(p.mesh));
+
+      assembled = false;
+      endSequence = { phase: "none", t: 0 };
+
+      // pointer events for drag
+      canvas.addEventListener("pointerdown", onPointerDown3D);
+      canvas.addEventListener("pointermove", onPointerMove3D);
+      canvas.addEventListener("pointerup", onPointerUp3D);
+      canvas.addEventListener("pointercancel", onPointerUp3D);
+
+      window.addEventListener("resize", onResize3D);
+      onResize3D();
+
+      setStatus("warn", "Bygg kuben…");
+      progressPill.textContent = `0 / ${pieces3d.length} låsta`;
+
+      animate3D();
+    }
+
+    function onResize3D() {
+      if (!renderer || !camera) return;
+      const rect = canvas.getBoundingClientRect();
+      renderer.setSize(rect.width, rect.height, false);
+      camera.aspect = rect.width / rect.height;
+      camera.updateProjectionMatrix();
+    }
+
+    function ndcFromEvent(e) {
+      const rect = canvas.getBoundingClientRect();
+      pointerNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointerNDC.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    }
+
+    function pickPiece(e) {
+      ndcFromEvent(e);
+      raycaster.setFromCamera(pointerNDC, camera);
+      const meshes = pieces3d.map(p => p.mesh);
+      const hits = raycaster.intersectObjects(meshes, true);
+      if (!hits.length) return null;
+
+      // find root piece
+      let obj = hits[0].object;
+      while (obj && !obj.userData.isPieceRoot) obj = obj.parent;
+      if (!obj) return null;
+
+      const piece = pieces3d.find(p => p.mesh === obj);
+      return piece || null;
+    }
+
+    function onPointerDown3D(e) {
+      if (endSequence.phase !== "none") return;
+
+      const piece = pickPiece(e);
+      if (!piece || piece.locked) {
+        // allow orbit controls on background
+        dragState = null;
+        controls.enabled = true;
+        return;
+      }
+
+      e.preventDefault();
+      canvas.setPointerCapture(e.pointerId);
+
+      // start drag piece
+      controls.enabled = false;
+      dragState = {
+        piece,
+        pointerId: e.pointerId,
+        // offset to keep grab point stable
+        grabOffset: new THREE.Vector3(),
+        hitPoint: new THREE.Vector3(),
+        planeNormal: new THREE.Vector3(),
+      };
+
+      // define drag plane facing camera, through piece position
+      const camDir = new THREE.Vector3();
+      camera.getWorldDirection(camDir);
+      dragPlane.setFromNormalAndCoplanarPoint(camDir, piece.mesh.position);
+
+      // compute offset
+      ndcFromEvent(e);
+      raycaster.setFromCamera(pointerNDC, camera);
+      const hit = new THREE.Vector3();
+      raycaster.ray.intersectPlane(dragPlane, hit);
+      dragState.hitPoint.copy(hit);
+      dragState.grabOffset.copy(piece.mesh.position).sub(hit);
+
+      // subtle highlight
+      piece.setEmissive(0.25);
+    }
+
+    function onPointerMove3D(e) {
+      if (!dragState) return;
+      if (e.pointerId !== dragState.pointerId) return;
+      e.preventDefault();
+
+      ndcFromEvent(e);
+      raycaster.setFromCamera(pointerNDC, camera);
+      const hit = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(dragPlane, hit)) return;
+
+      const newPos = hit.clone().add(dragState.grabOffset);
+      // clamp within a “play area”
+      newPos.x = clamp(newPos.x, -4, 4);
+      newPos.y = clamp(newPos.y, 0.2, 5);
+      newPos.z = clamp(newPos.z, -4, 4);
+
+      dragState.piece.mesh.position.copy(newPos);
+    }
+
+    function onPointerUp3D(e) {
+      if (!dragState) return;
+      if (e.pointerId !== dragState.pointerId) return;
+
+      const piece = dragState.piece;
+      piece.setEmissive(0.0);
+      trySnap3D(piece);
+
+      dragState = null;
+      controls.enabled = true;
+
+      update3DProgress();
+    }
+
+    function update3DProgress() {
+      const locked = pieces3d.filter(p => p.locked).length;
+      progressPill.textContent = `${locked} / ${pieces3d.length} låsta`;
+
+      if (!assembled && locked === pieces3d.length) {
+        assembled = true;
+        setStatus("ok", "Kuben är klar!");
+        toast3d.innerHTML = "<b>Klar!</b> Nu börjar slutsekvensen…";
+        startEndSequence();
+      } else if (!assembled) {
+        setStatus("warn", "Bygg kuben…");
+      }
+    }
+
+    function trySnap3D(piece) {
+      if (piece.locked) return;
+
+      // snap threshold for position + rotation
+      const posOk = piece.mesh.position.distanceTo(piece.targetPos) < 0.28;
+
+      // rotation: allow exact quarters
+      const rot = piece.mesh.rotation;
+      const tr = piece.targetRot;
+
+      const rotOk =
+        Math.abs(normalizeAngle(rot.x) - normalizeAngle(tr.x)) < 0.18 &&
+        Math.abs(normalizeAngle(rot.y) - normalizeAngle(tr.y)) < 0.18 &&
+        Math.abs(normalizeAngle(rot.z) - normalizeAngle(tr.z)) < 0.18;
+
+      if (posOk && rotOk) {
+        piece.mesh.position.copy(piece.targetPos);
+        piece.mesh.rotation.set(tr.x, tr.y, tr.z);
+        piece.locked = true;
+        piece.setLockedVisual(true);
+      }
+    }
+
+    function normalizeAngle(a) {
+      // map to [-PI, PI]
+      a = (a + Math.PI) % (Math.PI * 2);
+      if (a < 0) a += Math.PI * 2;
+      return a - Math.PI;
+    }
+
+    function create3DPieces() {
+      // Build pieces as “L-shapes” composed of two boxes.
+      // Targets are placed in a 2x2x2 cube volume, but each L-piece occupies a corner-ish region.
+      // This is an MVP: pieces are asymmetric and require correct rotation to snap.
+
+      const result = [];
+
+      const colors = [
+        0x66ccff, 0xffaa66, 0xaaff88, 0xdd99ff,
+        0xffee77, 0x66ffcc, 0xff6688, 0xaabfff
+      ];
+
+      const mkMat = (hex) => new THREE.MeshStandardMaterial({
+        color: hex,
+        roughness: 0.35,
+        metalness: 0.08,
+        emissive: new THREE.Color(0x000000),
+        emissiveIntensity: 1
+      });
+
+      const makeLPiece = (hex) => {
+        const root = new THREE.Group();
+        root.userData.isPieceRoot = true;
+
+        const mat = mkMat(hex);
+
+        const a = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.5), mat);
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.9, 0.5), mat);
+
+        // offset to form L (asym)
+        a.position.set(0.15, 0, 0);
+        b.position.set(-0.15, 0.2, 0);
+
+        root.add(a, b);
+
+        // outline edges for crispness
+        const addEdges = (m) => {
+          const eg = new THREE.EdgesGeometry(m.geometry);
+          const ln = new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 }));
+          ln.position.copy(m.position);
+          ln.rotation.copy(m.rotation);
+          root.add(ln);
+        };
+        addEdges(a); addEdges(b);
+
+        return { root, mat };
+      };
+
+      // Target positions in cube space: cube centered at (0,1,0), size ~2
+      // We'll create 8 pieces that fill around: each target is near a cube corner.
+      const targets = [
+        { pos: new THREE.Vector3(-0.55, 0.55, -0.55), rot: new THREE.Euler(0, Math.PI/2, 0) },
+        { pos: new THREE.Vector3( 0.55, 0.55, -0.55), rot: new THREE.Euler(0, 0, 0) },
+        { pos: new THREE.Vector3(-0.55, 0.55,  0.55), rot: new THREE.Euler(0, Math.PI, 0) },
+        { pos: new THREE.Vector3( 0.55, 0.55,  0.55), rot: new THREE.Euler(0, -Math.PI/2, 0) },
+
+        { pos: new THREE.Vector3(-0.55, 1.45, -0.55), rot: new THREE.Euler(Math.PI/2, 0, 0) },
+        { pos: new THREE.Vector3( 0.55, 1.45, -0.55), rot: new THREE.Euler(Math.PI/2, Math.PI/2, 0) },
+        { pos: new THREE.Vector3(-0.55, 1.45,  0.55), rot: new THREE.Euler(Math.PI/2, Math.PI, 0) },
+        { pos: new THREE.Vector3( 0.55, 1.45,  0.55), rot: new THREE.Euler(Math.PI/2, -Math.PI/2, 0) },
+      ];
+
+      // Spawn positions around the cube
+      const spawns = [
+        new THREE.Vector3(-3.2, 1.2, -2.8),
+        new THREE.Vector3( 3.0, 1.0, -2.4),
+        new THREE.Vector3(-3.0, 1.0,  2.6),
+        new THREE.Vector3( 3.2, 1.1,  2.8),
+        new THREE.Vector3(-2.8, 2.6,  0.0),
+        new THREE.Vector3( 2.8, 2.4,  0.0),
+        new THREE.Vector3( 0.0, 2.8, -2.8),
+        new THREE.Vector3( 0.0, 2.6,  2.8),
+      ];
+
+      for (let i=0; i<8; i++) {
+        const { root, mat } = makeLPiece(colors[i % colors.length]);
+        root.position.copy(spawns[i]);
+
+        // random start rotation (quarters)
+        const qs = [0, Math.PI/2, Math.PI, -Math.PI/2];
+        root.rotation.set(qs[(i*3)%4], qs[(i*5)%4], qs[(i*7)%4]);
+
+        // small floating animation offset
+        root.userData.floatSeed = i * 0.7;
+
+        // store piece
+        const piece = {
+          id: i,
+          mesh: root,
+          mat,
+          locked: false,
+          targetPos: targets[i].pos.clone().add(new THREE.Vector3(0, 1, 0)),
+          targetRot: targets[i].rot.clone(),
+          setEmissive: (k) => { mat.emissive.setRGB(k, k, k); },
+          setLockedVisual: (on) => {
+            if (on) {
+              mat.emissive.setRGB(0.15, 0.35, 0.20);
+              mat.roughness = 0.28;
+              mat.metalness = 0.14;
+            } else {
+              mat.emissive.setRGB(0,0,0);
+              mat.roughness = 0.35;
+              mat.metalness = 0.08;
+            }
+          }
+        };
+
+        // rotate on double-click / double-tap
+        let lastTap = 0;
+        root.userData.rotateTap = (now) => {
+          if (piece.locked || endSequence.phase !== "none") return;
+          if (now - lastTap < 300) {
+            // rotate 90° around Y each double
+            root.rotation.y += Math.PI / 2;
+            // also normalize to closest quarter for nicer snap logic
+            root.rotation.y = snapQuarter(root.rotation.y);
+          }
+          lastTap = now;
+        };
+
+        result.push(piece);
+      }
+
+      // Listen on canvas for double click/tap rotate of picked piece
+      canvas.addEventListener("dblclick", (e) => {
+        if (endSequence.phase !== "none") return;
+        const piece = pickPiece(e);
+        if (!piece) return;
+        piece.mesh.rotation.y = snapQuarter(piece.mesh.rotation.y + Math.PI/2);
+        trySnap3D(piece);
+        update3DProgress();
+      });
+
+      // Touch double-tap: we implement via pointerdown timing on picked piece
+      canvas.addEventListener("pointerdown", (e) => {
+        if (endSequence.phase !== "none") return;
+        const piece = pickPiece(e);
+        if (!piece) return;
+        piece.mesh.userData.rotateTap(performance.now());
+      });
+
+      return result;
+    }
+
+    function snapQuarter(a) {
+      const q = Math.PI / 2;
+      return Math.round(a / q) * q;
+    }
+
+    function startEndSequence() {
+      endSequence = { phase: "pulse", t: 0 };
+
+      // lock controls and pieces
+      controls.enabled = false;
+      if (dragState?.piece) dragState.piece.setEmissive(0);
+      dragState = null;
+
+      // ease all pieces perfectly into place (safety)
+      pieces3d.forEach(p => {
+        p.mesh.position.copy(p.targetPos);
+        p.mesh.rotation.set(p.targetRot.x, p.targetRot.y, p.targetRot.z);
+        p.locked = true;
+        p.setLockedVisual(true);
+      });
+
+      // after pulse, explode
+      setTimeout(() => { endSequence = { phase: "explode", t: 0 }; }, 2400);
+    }
+
+    function buildSwordHilt() {
+      // simple hilt: handle + guard + pommel
+      const g = new THREE.Group();
+      g.position.set(0, 1, 0);
+
+      const handleMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.55, metalness: 0.15 });
+      const metalMat  = new THREE.MeshStandardMaterial({ color: 0xb8c0cc, roughness: 0.25, metalness: 0.85 });
+
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 1.15, 18), handleMat);
+      handle.position.y = 0.55;
+
+      const wrap = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 10, 24), metalMat);
+      wrap.rotation.x = Math.PI / 2;
+      wrap.position.y = 0.15;
+
+      const wrap2 = wrap.clone();
+      wrap2.position.y = 0.95;
+
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.08, 0.18), metalMat);
+      guard.position.y = 1.15;
+
+      const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 18), metalMat);
+      pommel.position.y = 0.0;
+
+      g.add(handle, wrap, wrap2, guard, pommel);
+
+      // glow ring
+      const glow = new THREE.Mesh(
+        new THREE.TorusGeometry(0.55, 0.02, 10, 64),
+        new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.2 })
+      );
+      glow.rotation.x = Math.PI / 2;
+      glow.position.y = 0.75;
+      g.add(glow);
+
+      g.userData.glow = glow;
+      return g;
+    }
+
+    let swordHilt = null;
+
+    function animate3D() {
+      if (!renderer) return;
+      requestAnimationFrame(animate3D);
+
+      controls.update();
+
+      const t = performance.now() * 0.001;
+
+      // idle float for unlocked pieces
+      pieces3d.forEach(p => {
+        if (p.locked || endSequence.phase !== "none") return;
+        const s = p.mesh.userData.floatSeed || 0;
+        p.mesh.position.y += Math.sin(t*1.4 + s) * 0.0006;
+      });
+
+      // End sequences
+      if (endSequence.phase === "pulse") {
+        endSequence.t += 1/60;
+
+        const pulse = 1.0 + Math.sin(t*2.0) * 0.03;
+        puzzleGroup.scale.setScalar(pulse);
+        puzzleGroup.rotation.y += 0.003;
+
+      } else if (endSequence.phase === "explode") {
+        endSequence.t += 1/60;
+        const p = clamp(endSequence.t / 1.25, 0, 1);
+        const k = easeInOut(p);
+
+        // separate pieces outward
+        pieces3d.forEach((piece) => {
+          const dir = piece.targetPos.clone().sub(new THREE.Vector3(0,1,0)).normalize();
+          const amp = 3.2;
+          const base = piece.targetPos;
+          const offset = dir.multiplyScalar(amp * k);
+          piece.mesh.position.copy(base).add(offset);
+          piece.mesh.rotation.y += 0.02 * (1 - p);
+          piece.mat.opacity = 1.0;
+          piece.mat.transparent = false;
+        });
+
+        // fade cube frame
+        targetGroup.children.forEach(obj => {
+          if (obj.material) {
+            obj.material.opacity = 0.18 * (1 - k);
+            obj.material.transparent = true;
+          }
+        });
+
+        // reveal sword hilt near end
+        if (!swordHilt && p > 0.55) {
+          swordHilt = buildSwordHilt();
+          swordHilt.scale.setScalar(0.01);
+          scene.add(swordHilt);
+          toast3d.innerHTML = "<b>…</b> Något dyker upp i kärnan.";
+          setStatus("ok", "Svärdshandtag avslöjat!");
+        }
+        if (swordHilt) {
+          const show = clamp((p - 0.55) / 0.45, 0, 1);
+          const s = 0.01 + 0.99 * easeInOut(show);
+          swordHilt.scale.setScalar(s);
+          swordHilt.rotation.y += 0.01;
+
+          // pulse glow
+          const glow = swordHilt.userData.glow;
+          if (glow) glow.material.opacity = 0.12 + Math.sin(t*2.6) * 0.06;
+        }
+
+        // finish
+        if (p >= 1) {
+          endSequence.phase = "done";
+          puzzleGroup.scale.setScalar(1);
+        }
+      } else if (endSequence.phase === "done") {
+        // keep sword alive
+        if (swordHilt) {
+          swordHilt.rotation.y += 0.006;
+          const glow = swordHilt.userData.glow;
+          if (glow) glow.material.opacity = 0.14 + Math.sin(t*2.3) * 0.06;
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // =========================
+    // Reset logic
+    // =========================
+    function resetPhase1() {
+      setPhaseUI(1);
+      screen3d.classList.add("hidden");
+      screen2d.classList.remove("hidden");
+      overlay.classList.remove("on");
+      setup2D();
+      setStatus("warn", "Pågår…");
+      progressPill.textContent = "0 / 10 låsta";
+    }
+
+    function resetPhase2() {
+      // remove listeners (cheap approach: re-init)
+      setPhaseUI(2);
+      screen2d.classList.add("hidden");
+      screen3d.classList.remove("hidden");
+      overlay.classList.remove("on");
+      swordHilt = null;
+      init3D();
+    }
+
+    resetBtn.addEventListener("click", () => {
+      if (currentPhase === 1) resetPhase1();
+      else resetPhase2();
+    });
+
+    // =========================
+    // Boot
+    // =========================
+    setPhaseUI(1);
+    setup2D();
+    setStatus("warn", "Pågår…");
+    progressPill.textContent = "0 / 10 låsta";
+  </script>
+</body>
+</html>
